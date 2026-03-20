@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
+import GlobeGl from "globe.gl";
 
 // ─── Типы ─────────────────────────────────────────────────────────────────────
 
@@ -452,11 +453,106 @@ function RecommendationsPage({addToCart}:any) {
   );
 }
 
-// ─── ORDERS ───────────────────────────────────────────────────────────────────
+// ─── 3D GLOBE + ORDERS ────────────────────────────────────────────────────────
+
+const GLOBE_CITIES = [
+  {name:"Москва",     lat:55.75, lng:37.62, count:47, color:"#C9A84C"},
+  {name:"СПб",        lat:59.93, lng:30.32, count:23, color:"#C9A84C"},
+  {name:"Казань",     lat:55.79, lng:49.12, count:12, color:"#C9A84C"},
+  {name:"Екатеринбург",lat:56.84,lng:60.60, count:18, color:"#C9A84C"},
+  {name:"Новосибирск",lat:54.99, lng:82.90, count:9,  color:"#C9A84C"},
+  {name:"Владивосток",lat:43.12, lng:131.9, count:5,  color:"#C9A84C"},
+  {name:"Сочи",       lat:43.60, lng:39.73, count:6,  color:"#C9A84C"},
+  {name:"Лондон",     lat:51.51, lng:-0.13, count:3,  color:"#E8C96A"},
+  {name:"Берлин",     lat:52.52, lng:13.40, count:2,  color:"#E8C96A"},
+  {name:"Дубай",      lat:25.20, lng:55.27, count:4,  color:"#E8C96A"},
+  {name:"Нью-Йорк",   lat:40.71, lng:-74.0, count:2,  color:"#E8C96A"},
+  {name:"Токио",      lat:35.68, lng:139.7, count:3,  color:"#E8C96A"},
+  {name:"Пекин",      lat:39.91, lng:116.4, count:2,  color:"#E8C96A"},
+  {name:"Париж",      lat:48.86, lng:2.350, count:2,  color:"#E8C96A"},
+];
+
+function Globe3D() {
+  const mountRef = useRef<HTMLDivElement>(null);
+  const globeRef = useRef<any>(null);
+  const [tooltip, setTooltip] = useState<{text:string;x:number;y:number}|null>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!mountRef.current) return;
+    const el = mountRef.current;
+    const w = el.clientWidth || 700;
+    const h = Math.min(w * 0.65, 500);
+
+    const globe = GlobeGl()(el)
+      .width(w)
+      .height(h)
+      .backgroundColor("rgba(0,0,0,0)")
+      .showAtmosphere(true)
+      .atmosphereColor("#C9A84C")
+      .atmosphereAltitude(0.15)
+      .globeImageUrl("https://unpkg.com/three-globe/example/img/earth-night.jpg")
+      .bumpImageUrl("https://unpkg.com/three-globe/example/img/earth-topology.png")
+      .pointsData(GLOBE_CITIES)
+      .pointLat((d:any) => d.lat)
+      .pointLng((d:any) => d.lng)
+      .pointColor((d:any) => d.color)
+      .pointAltitude((d:any) => d.count / 200)
+      .pointRadius((d:any) => Math.max(0.4, d.count / 30))
+      .pointLabel((d:any) => `<div style="background:#1A1A1A;border:1px solid #C9A84C;border-radius:8px;padding:6px 12px;font-size:13px;color:#EDE8DC;font-family:Montserrat,sans-serif"><b style="color:#C9A84C">${(d as any).name}</b><br/>${(d as any).count} ресторанов</div>`)
+      .ringsData(GLOBE_CITIES.filter(c => c.count > 10))
+      .ringLat((d:any) => d.lat)
+      .ringLng((d:any) => d.lng)
+      .ringColor(() => "#C9A84C")
+      .ringMaxRadius(3)
+      .ringPropagationSpeed(1.5)
+      .ringRepeatPeriod(1000);
+
+    // Стиль глобуса
+    globe.controls().autoRotate = true;
+    globe.controls().autoRotateSpeed = 0.6;
+    globe.controls().enableZoom = true;
+    globe.controls().minDistance = 150;
+    globe.controls().maxDistance = 500;
+
+    // Начальная точка — Россия
+    globe.pointOfView({ lat: 55, lng: 55, altitude: 2.2 }, 1000);
+
+    globeRef.current = globe;
+
+    setTimeout(() => setReady(true), 800);
+
+    const handleResize = () => {
+      if (!el) return;
+      const nw = el.clientWidth;
+      const nh = Math.min(nw * 0.65, 500);
+      globe.width(nw).height(nh);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      if (globe._destructor) globe._destructor();
+    };
+  }, []);
+
+  return (
+    <div style={{position:"relative" as const, borderRadius:16, overflow:"hidden", background:"#030508"}}>
+      {!ready && (
+        <div style={{position:"absolute" as const,inset:0,display:"flex",flexDirection:"column" as const,alignItems:"center",justifyContent:"center",zIndex:5,background:"#030508"}}>
+          <div style={{width:48,height:48,border:"3px solid rgba(201,168,76,0.2)",borderTop:"3px solid #C9A84C",borderRadius:"50%",animation:"globe-spin 1s linear infinite",marginBottom:16}}/>
+          <span style={{color:"#C9A84C",fontSize:13,fontWeight:600,letterSpacing:"0.1em"}}>Загрузка глобуса...</span>
+          <style>{`@keyframes globe-spin{to{transform:rotate(360deg);}}`}</style>
+        </div>
+      )}
+      <div ref={mountRef} style={{width:"100%",opacity:ready?1:0,transition:"opacity 0.8s ease"}}/>
+      <div style={{position:"absolute" as const,bottom:12,left:16,fontSize:11,color:"rgba(201,168,76,0.5)",fontWeight:500,letterSpacing:"0.05em"}}>
+        🌍 Перетащи для вращения · Колёсико для зума
+      </div>
+    </div>
+  );
+}
 
 function OrdersPage({currentUser,setPage}:any) {
-  const [tooltip,setTooltip]=useState<{city:string;x:number;y:number}|null>(null);
-
   if(!currentUser) return (
     <div style={{display:"flex",flexDirection:"column" as const,alignItems:"center",justifyContent:"center",padding:"120px 24px",textAlign:"center" as const}}>
       <span style={{fontSize:60,marginBottom:16}}>👑</span>
@@ -466,72 +562,20 @@ function OrdersPage({currentUser,setPage}:any) {
     </div>
   );
 
-  // Города на карте (координаты в % от размера SVG viewBox 0 0 1000 500)
-  const cities=[
-    {name:"Москва",x:53,y:36,count:47},
-    {name:"СПб",x:48,y:28,count:23},
-    {name:"Казань",x:59,y:37,count:12},
-    {name:"Екатеринбург",x:67,y:35,count:18},
-    {name:"Новосибирск",x:74,y:36,count:9},
-    {name:"Владивосток",x:90,y:42,count:5},
-    {name:"Сочи",x:52,y:44,count:6},
-    {name:"Самара",x:60,y:38,count:8},
-    {name:"Лондон",x:31,y:30,count:3},
-    {name:"Берлин",x:36,y:30,count:2},
-    {name:"Дубай",x:57,y:47,count:4},
-    {name:"Нью-Йорк",x:17,y:35,count:2},
-    {name:"Токио",x:87,y:38,count:3},
-  ];
-
   return (
     <div style={{maxWidth:1100,margin:"0 auto",padding:"40px 24px"}}>
       <SectionTitle title="Мои" accent="Заказы"/>
 
-      {/* Настоящая SVG карта мира */}
-      <div style={{background:"#0D0D0D",border:"1px solid #1E1E1E",borderRadius:20,padding:28,marginBottom:32,overflow:"hidden"}}>
-        <h3 style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,color:"#C9A84C",marginBottom:20}}>🗺️ Карта присутствия LunaKing</h3>
-        <div style={{position:"relative" as const,width:"100%",aspectRatio:"2/1",borderRadius:12,overflow:"hidden",background:"#070707"}}>
-          {/* Используем Leaflet-подобную тайловую карту через img */}
-          <svg viewBox="0 0 1000 500" style={{width:"100%",height:"100%"}} preserveAspectRatio="xMidYMid meet">
-            {/* Фон океана */}
-            <rect width="1000" height="500" fill="#0A0F18"/>
-            {/* Сетка координат */}
-            {[0,100,200,300,400,500,600,700,800,900].map(x=><line key={x} x1={x} y1={0} x2={x} y2={500} stroke="rgba(201,168,76,0.04)" strokeWidth="1"/>)}
-            {[0,100,200,300,400,500].map(y=><line key={y} x1={0} y1={y} x2={1000} y2={y} stroke="rgba(201,168,76,0.04)" strokeWidth="1"/>)}
-            {/* Континенты — упрощённые силуэты */}
-            {/* Европа */}
-            <path d="M300 150 Q320 130 340 135 Q360 120 375 130 Q390 125 400 135 Q410 130 415 140 Q420 135 430 140 Q435 150 425 158 Q430 165 420 170 Q415 180 405 175 Q400 185 390 180 Q380 190 370 185 Q360 195 350 188 Q340 195 330 188 Q320 195 310 185 Q300 180 295 168 Q290 158 300 150Z" fill="#1A2A1A" stroke="rgba(201,168,76,0.15)" strokeWidth="0.5"/>
-            {/* Азия */}
-            <path d="M430 100 Q480 85 540 90 Q600 80 650 95 Q700 88 740 100 Q780 95 810 110 Q830 120 820 135 Q810 145 800 140 Q790 155 770 150 Q760 165 740 158 Q720 170 700 162 Q680 175 660 168 Q640 178 615 170 Q590 180 565 172 Q540 182 515 175 Q490 185 465 176 Q440 185 425 175 Q415 165 420 152 Q415 140 425 130 Q420 115 430 100Z" fill="#1A2A1A" stroke="rgba(201,168,76,0.15)" strokeWidth="0.5"/>
-            {/* Африка */}
-            <path d="M340 200 Q360 195 380 200 Q400 195 415 205 Q425 215 420 230 Q425 245 415 260 Q420 275 410 290 Q415 305 405 320 Q410 335 400 345 Q395 355 385 350 Q375 358 365 352 Q355 358 345 350 Q335 342 330 330 Q320 318 325 305 Q315 290 320 275 Q312 260 318 245 Q312 228 320 215 Q328 205 340 200Z" fill="#1A2A1A" stroke="rgba(201,168,76,0.15)" strokeWidth="0.5"/>
-            {/* Северная Америка */}
-            <path d="M70 100 Q100 88 130 95 Q160 85 185 95 Q210 88 225 100 Q240 95 250 110 Q260 120 250 135 Q255 148 245 158 Q250 170 238 178 Q228 188 215 182 Q202 192 188 185 Q174 193 160 186 Q146 194 132 186 Q118 192 104 184 Q90 188 78 178 Q65 170 62 158 Q55 145 60 132 Q55 118 65 108 Q68 103 70 100Z" fill="#1A2A1A" stroke="rgba(201,168,76,0.15)" strokeWidth="0.5"/>
-            {/* Южная Америка */}
-            <path d="M175 235 Q195 228 215 235 Q230 230 240 242 Q250 252 245 268 Q250 283 240 298 Q245 312 235 325 Q240 340 228 350 Q218 358 205 352 Q193 360 182 352 Q170 358 160 348 Q150 336 155 322 Q148 308 155 293 Q148 278 155 264 Q150 250 160 240 Q168 233 175 235Z" fill="#1A2A1A" stroke="rgba(201,168,76,0.15)" strokeWidth="0.5"/>
-            {/* Австралия */}
-            <path d="M760 275 Q785 265 810 270 Q835 265 855 278 Q870 288 865 302 Q870 315 858 325 Q848 335 832 330 Q818 338 802 332 Q787 338 773 330 Q758 322 755 308 Q750 293 758 282 Q760 278 760 275Z" fill="#1A2A1A" stroke="rgba(201,168,76,0.15)" strokeWidth="0.5"/>
-            {/* Маркеры городов */}
-            {cities.map(city=>(
-              <g key={city.name}>
-                <circle cx={city.x*10} cy={city.y*5} r={city.count>10?7:5}
-                  fill="#C9A84C" fillOpacity={0.85}
-                  stroke="#E8C96A" strokeWidth="1"
-                  style={{cursor:"pointer",filter:"drop-shadow(0 0 6px rgba(201,168,76,0.6))"}}
-                  onMouseEnter={e=>{const r=e.currentTarget.getBoundingClientRect();const pr=(e.currentTarget.closest("svg") as SVGSVGElement)!.getBoundingClientRect();setTooltip({city:`${city.name}: ${city.count} рест.`,x:r.left-pr.left,y:r.top-pr.top});}}
-                  onMouseLeave={()=>setTooltip(null)}
-                />
-                <circle cx={city.x*10} cy={city.y*5} r={city.count>10?11:8}
-                  fill="none" stroke="rgba(201,168,76,0.3)" strokeWidth="1"
-                  style={{animation:"pulse-ring 2s ease-out infinite"}}/>
-              </g>
-            ))}
-          </svg>
-          {/* Tooltip */}
-          {tooltip&&<div style={{position:"absolute" as const,left:tooltip.x,top:tooltip.y-36,background:"#1A1A1A",border:"1px solid #C9A84C",borderRadius:8,padding:"5px 12px",fontSize:12,color:"#EDE8DC",pointerEvents:"none",whiteSpace:"nowrap" as const,zIndex:10}}>{tooltip.city}</div>}
-          <div style={{position:"absolute" as const,bottom:12,left:16,fontSize:11,color:"#333"}}>Наведи на точку для деталей</div>
+      {/* 3D Карта мира */}
+      <div style={{background:"#0A0A0A",border:"1px solid #1E1E1E",borderRadius:20,padding:28,marginBottom:32,overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap" as const,gap:12}}>
+          <h3 style={{fontFamily:"Cormorant Garamond,serif",fontSize:24,color:"#C9A84C",margin:0}}>🌍 Карта присутствия LunaKing</h3>
+          <div style={{display:"flex",gap:20,fontSize:12,color:"#666"}}>
+            <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:"50%",background:"#C9A84C",display:"inline-block"}}/> Россия ({GLOBE_CITIES.filter(c=>c.color==="#C9A84C").reduce((s,c)=>s+c.count,0)} рест.)</span>
+            <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:"50%",background:"#E8C96A",display:"inline-block"}}/> Мир ({GLOBE_CITIES.filter(c=>c.color==="#E8C96A").reduce((s,c)=>s+c.count,0)} рест.)</span>
+          </div>
         </div>
-        <style>{`@keyframes pulse-ring{0%{opacity:0.8;transform:scale(1);}100%{opacity:0;transform:scale(2);}}`}</style>
+        <Globe3D />
       </div>
 
       {/* История */}
